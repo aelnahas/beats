@@ -50,9 +50,15 @@ type eventConsumer struct {
 	// separate goroutine so we don't block on the control path.
 	queueReader queueReader
 
-	// This waitgroup is released when this eventConsumer's worker
-	// goroutines return.
+	// This waitgroup is released when this eventConsumer's main worker
+	// goroutine returns.
 	wg sync.WaitGroup
+
+	// queueReaderWg is released when the queueReader goroutine returns.
+	// It is separate from wg because we must wait for the main goroutine
+	// to exit first (which closes queueReader.req), and only then wait
+	// for the queueReader to drain and exit.
+	queueReaderWg sync.WaitGroup
 }
 
 // consumerTarget specifies the queue to read from, the parameters needed
@@ -89,15 +95,20 @@ func newEventConsumer(
 		c.run()
 	})
 
-	// Even though we start a goroutine here, we don't include it in the
-	// waitGroup used for shutdown: if the queue itself is not closed yet,
-	// then the queueReader may be blocked in a read call to the queue,
-	// and waiting on it would deadlock. (This scenario is common; the
-	// queue is rarely closed properly on shutdown.) The queueReader itself
-	// has no independent state to clean up, and can safely shut down
-	// after the eventConsumer is already gone, so nothing is lost by
-	// letting it happen asynchronously.
-	go c.queueReader.run(c.logger)
+	// The queueReader is tracked in a separate WaitGroup (queueReaderWg)
+	// rather than wg. close() must wait for the main run() goroutine first
+	// (via wg.Wait), because run() is responsible for closing queueReader.req
+	// to signal shutdown. Only after that channel is closed can the
+	// queueReader unblock from any in-flight queue.Get call and exit.
+	//
+	// This ordering is safe because processOutputController.waitClose always
+	// closes the queue before calling consumer.close(), so queue.Get()
+	// will return once the queue's context is cancelled.
+	c.queueReaderWg.Add(1)
+	go func() {
+		defer c.queueReaderWg.Done()
+		c.queueReader.run(c.logger)
+	}()
 
 	return c
 }
@@ -236,5 +247,11 @@ func (c *eventConsumer) retry(batch *ttlBatch, decreaseTTL bool) {
 
 func (c *eventConsumer) close() {
 	close(c.done)
+	// Wait for the main run() goroutine, which will close queueReader.req
+	// as its last action before returning.
 	c.wg.Wait()
+	// Now that queueReader.req is closed, the queueReader goroutine will
+	// unblock and exit. Wait for it to finish so callers can be certain
+	// all logging and cleanup in the queueReader has completed.
+	c.queueReaderWg.Wait()
 }
