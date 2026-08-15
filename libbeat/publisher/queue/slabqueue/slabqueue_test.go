@@ -18,6 +18,7 @@
 package slabqueue
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -46,7 +47,7 @@ func TestPublishAndGet(t *testing.T) {
 	assert.Equal(t, 1, pool.Available())
 	assert.Equal(t, 3, pool.Capacity()-pool.Available(), "pool should report 3 slots in use")
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 3, b.Count())
 	assert.Equal(t, 1, b.Entry(0))
@@ -75,12 +76,12 @@ func TestPerPipelineFIFOIsolation(t *testing.T) {
 	pB.Publish(21)
 	pA.Publish(12)
 
-	bA, err := qA.Get(0)
+	bA, err := qA.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 3, bA.Count())
 	assert.Equal(t, []int{10, 11, 12}, []int{bA.Entry(0), bA.Entry(1), bA.Entry(2)})
 
-	bB, err := qB.Get(0)
+	bB, err := qB.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, bB.Count())
 	assert.Equal(t, []int{20, 21}, []int{bB.Entry(0), bB.Entry(1)})
@@ -127,7 +128,7 @@ func TestPublishBlocksWhenPoolExhausted(t *testing.T) {
 	}
 
 	// Drain one of A's events, returning a slot to the pool.
-	bA, err := qA.Get(1)
+	bA, err := qA.Get(context.Background(), 1)
 	require.NoError(t, err)
 	require.Equal(t, 1, bA.Count())
 	bA.Done()
@@ -167,7 +168,7 @@ func TestProducerACKCallback(t *testing.T) {
 	for i := range 5 {
 		p.Publish(i)
 	}
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	b.Done()
 
@@ -196,10 +197,10 @@ func TestACKCallbackFiresInPublishOrder(t *testing.T) {
 	}
 
 	// Read two batches of size 2; b1 = events 0,1; b2 = events 2,3.
-	b1, err := q.Get(2)
+	b1, err := q.Get(context.Background(), 2)
 	require.NoError(t, err)
 	require.Equal(t, 2, b1.Count())
-	b2, err := q.Get(2)
+	b2, err := q.Get(context.Background(), 2)
 	require.NoError(t, err)
 	require.Equal(t, 2, b2.Count())
 
@@ -243,9 +244,9 @@ func TestSlotsReleasedBeforeACKOrderingResolves(t *testing.T) {
 	}
 	assert.Equal(t, 0, pool.Available(), "pool should be full")
 
-	b1, err := q.Get(2)
+	b1, err := q.Get(context.Background(), 2)
 	require.NoError(t, err)
-	b2, err := q.Get(2)
+	b2, err := q.Get(context.Background(), 2)
 	require.NoError(t, err)
 
 	// Done b2 first; its slots should be released even though ordering
@@ -271,7 +272,7 @@ func TestCloseWaitsForInFlightBatches(t *testing.T) {
 
 	// Drain the FIFO into an in-flight batch; q.count is now 0 but the
 	// batch hasn't been Done()'d yet.
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 
 	q.Close(false)
@@ -317,11 +318,11 @@ func TestReleaseDrainsStrandedCompletedSuccessors(t *testing.T) {
 
 	// Pull three batches in publish order — A, B, C — each holding one
 	// of the published events.
-	bA, err := q.Get(1)
+	bA, err := q.Get(context.Background(), 1)
 	require.NoError(t, err)
-	bB, err := q.Get(1)
+	bB, err := q.Get(context.Background(), 1)
 	require.NoError(t, err)
-	bC, err := q.Get(1)
+	bC, err := q.Get(context.Background(), 1)
 	require.NoError(t, err)
 
 	// Complete B and C ahead of A. Their Done() sweeps walk pendingHead,
@@ -355,7 +356,7 @@ func TestReleaseDrainsStrandedCompletedSuccessors(t *testing.T) {
 
 	// Drain the last published event (still in the queue's own FIFO) so
 	// q.Done() ends in a clean state.
-	bD, err := q.Get(0)
+	bD, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	bD.Done()
 	select {
@@ -389,7 +390,7 @@ func TestPerPipelineACKIsolation(t *testing.T) {
 	pA.Publish(2)
 	pB.Publish(10)
 
-	bA, err := qA.Get(0)
+	bA, err := qA.Get(context.Background(), 0)
 	require.NoError(t, err)
 	bA.Done()
 
@@ -416,7 +417,7 @@ func TestGetBlocksUntilPublish(t *testing.T) {
 
 	done := make(chan int, 1)
 	go func() {
-		b, err := q.Get(0)
+		b, err := q.Get(context.Background(), 0)
 		if err != nil {
 			done <- -1
 			return
@@ -452,7 +453,7 @@ func TestGetReturnsPromptly(t *testing.T) {
 	require.True(t, ok)
 
 	start := time.Now()
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	assert.Equal(t, 1, b.Count())
 	assert.Less(t, time.Since(start), 200*time.Millisecond, "Get should return within the debounce window, not block")
@@ -474,7 +475,7 @@ func TestGetCoalescesQueuedEvents(t *testing.T) {
 		require.True(t, ok)
 	}
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	assert.Equal(t, 5, b.Count(), "Get should return all queued events in one batch")
 	b.Done()
@@ -484,7 +485,7 @@ func TestGetCoalescesQueuedEvents(t *testing.T) {
 		_, ok := p.Publish(i)
 		require.True(t, ok)
 	}
-	b2, err := q.Get(2)
+	b2, err := q.Get(context.Background(), 2)
 	require.NoError(t, err)
 	assert.Equal(t, 2, b2.Count(), "Get(2) must return at most maxEvents")
 	b2.Done()
@@ -499,7 +500,7 @@ func TestCloseUnblocksGet(t *testing.T) {
 
 	got := make(chan error, 1)
 	go func() {
-		_, err := q.Get(0)
+		_, err := q.Get(context.Background(), 0)
 		got <- err
 	}()
 	time.Sleep(50 * time.Millisecond)
@@ -579,7 +580,7 @@ func TestForceCloseClearsPendingHead(t *testing.T) {
 	p.Publish(1)
 	p.Publish(2)
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.NotNil(t, b)
 
@@ -622,7 +623,7 @@ func TestForceCloseSuppressesACKCallbacks(t *testing.T) {
 
 	// Get the batch into "in-flight" state — slots reserved, not yet
 	// acked.
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 2, b.Count())
 
@@ -662,7 +663,7 @@ func TestCloseGracefulWaitsForDrain(t *testing.T) {
 	}
 
 	// Drain and ack; Done should then fire.
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	b.Done()
 
@@ -698,7 +699,7 @@ func TestSlotMemoryClearedOnAck(t *testing.T) {
 	v := 42
 	p.Publish(&v)
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	b.Done()
 
@@ -744,7 +745,7 @@ func TestConcurrentPublishersAndConsumers(t *testing.T) {
 			defer q.Close(false)
 			received := 0
 			for received < eventsPerPipe {
-				b, err := q.Get(8)
+				b, err := q.Get(context.Background(), 8)
 				if err != nil {
 					return
 				}
@@ -945,7 +946,7 @@ func TestShrinkConvergesUnderSustainedLoad(t *testing.T) {
 				return
 			default:
 			}
-			b, err := q.Get(4)
+			b, err := q.Get(context.Background(), 4)
 			if err != nil {
 				return
 			}
@@ -1074,7 +1075,7 @@ func TestPerQueueCapUnblocksOnDrain(t *testing.T) {
 	require.Positive(t, pool.Available(), "the pool is not the constraint here")
 
 	// Ack one event on this queue: returns a per-queue budget unit.
-	b, err := q.Get(1)
+	b, err := q.Get(context.Background(), 1)
 	require.NoError(t, err)
 	b.Done()
 
@@ -1150,7 +1151,7 @@ func TestSetTargetGrowAcrossChunkBoundaryPreservesEvents(t *testing.T) {
 	// Raise the target across the first chunk boundary while events are live.
 	pool.setTarget(slabChunkSize + 10)
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 4, b.Count())
 	for i := range 4 {
@@ -1190,7 +1191,7 @@ func TestResizeUnderConcurrentTraffic(t *testing.T) {
 			defer wg.Done()
 			got := 0
 			for got < perPipe {
-				b, err := q.Get(0)
+				b, err := q.Get(context.Background(), 0)
 				if err != nil {
 					return
 				}
@@ -1232,7 +1233,7 @@ func TestResizeUnderConcurrentTraffic(t *testing.T) {
 // least one event is available so Get does not block.
 func drainOnce[T any](t *testing.T, q *Queue[T]) int {
 	t.Helper()
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	n := b.Count()
 	b.Done()

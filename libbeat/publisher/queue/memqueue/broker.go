@@ -330,9 +330,11 @@ func (b *broker[T]) closeProducerAckWaits() {
 	}
 }
 
-func (b *broker[T]) Get(count int) (queue.Batch[T], error) {
+func (b *broker[T]) Get(ctx context.Context, count int) (queue.Batch[T], error) {
 	responseChan := make(chan *batch[T], 1)
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-b.ctx.Done():
 		return nil, io.EOF
 	case b.getChan <- getRequest[T]{

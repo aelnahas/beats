@@ -18,6 +18,7 @@
 package memqueue
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -102,7 +103,7 @@ func TestACKWaitAckProducerClosesAfterDrain(t *testing.T) {
 	ctx := t.Context()
 	go func() {
 		for ctx.Err() == nil {
-			b, err := q.Get(64)
+			b, err := q.Get(context.Background(), 64)
 			if err != nil {
 				return
 			}
@@ -152,7 +153,7 @@ func TestPublishSequentialEntryIDs(t *testing.T) {
 	ctx := t.Context()
 	go func() {
 		for ctx.Err() == nil {
-			batch, err := q.Get(64)
+			batch, err := q.Get(context.Background(), 64)
 			if err != nil {
 				return
 			}

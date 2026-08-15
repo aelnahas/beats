@@ -18,6 +18,7 @@
 package diskqueue
 
 import (
+	"context"
 	"flag"
 	"math/rand/v2"
 	"path/filepath"
@@ -175,7 +176,7 @@ func readBatch(t *testing.T, queueInstance *diskQueue, timeout time.Duration) qu
 
 	results := make(chan getResult, 1)
 	go func() {
-		batch, err := queueInstance.Get(1)
+		batch, err := queueInstance.Get(context.Background(), 1)
 		results <- getResult{batch: batch, err: err}
 	}()
 

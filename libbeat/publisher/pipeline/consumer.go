@@ -18,6 +18,7 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 
 	"github.com/elastic/beats/v7/libbeat/publisher"
@@ -54,11 +55,15 @@ type eventConsumer struct {
 	// goroutine returns.
 	wg sync.WaitGroup
 
-	// queueReaderWg is released when the queueReader goroutine returns.
-	// It is separate from wg because we must wait for the main goroutine
-	// to exit first (which closes queueReader.req), and only then wait
-	// for the queueReader to drain and exit.
+	// queueReaderWg is a second wait group sepcific to queueReader.
+	// the intention is wait for queueReader to complete without
+	// deadlocking with the eventConsumer wg
 	queueReaderWg sync.WaitGroup
+
+	//queueReaderCtx and queueReaderCancel are used to signal to queueReader
+	// a shutdown without closing its queue
+	queueReaderCtx    context.Context
+	queueReaderCancel context.CancelFunc
 }
 
 // consumerTarget specifies the queue to read from, the parameters needed
@@ -95,6 +100,9 @@ func newEventConsumer(
 		c.run()
 	})
 
+	// TODO: should these context have a lifetime?
+	c.queueReaderCtx, c.queueReaderCancel = context.WithCancel(context.Background())
+
 	// The queueReader is tracked in a separate WaitGroup (queueReaderWg)
 	// rather than wg. close() must wait for the main run() goroutine first
 	// (via wg.Wait), because run() is responsible for closing queueReader.req
@@ -107,7 +115,7 @@ func newEventConsumer(
 	c.queueReaderWg.Add(1)
 	go func() {
 		defer c.queueReaderWg.Done()
-		c.queueReader.run(c.logger)
+		c.queueReader.run(c.queueReaderCtx, c.logger)
 	}()
 
 	return c
@@ -247,11 +255,16 @@ func (c *eventConsumer) retry(batch *ttlBatch, decreaseTTL bool) {
 
 func (c *eventConsumer) close() {
 	close(c.done)
-	// Wait for the main run() goroutine, which will close queueReader.req
-	// as its last action before returning.
+	// Cancel the queueReader's context immediately so any in-flight
+	// queue.Get call returns without waiting for the queue to be closed.
+	// TODO: It seems from my understanding that memqueue and slabqueue
+	// would drop inflight messages due to how each queue processes
+	// Batch#Release (pre-existing behaviour). Do I need to handle this?
+	c.queueReaderCancel()
+
+	// wait eventConsumer to complete
 	c.wg.Wait()
-	// Now that queueReader.req is closed, the queueReader goroutine will
-	// unblock and exit. Wait for it to finish so callers can be certain
-	// all logging and cleanup in the queueReader has completed.
+
+	// Now that queueReader.req is closed, wait for the queueReader to complete
 	c.queueReaderWg.Wait()
 }

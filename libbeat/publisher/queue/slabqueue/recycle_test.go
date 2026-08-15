@@ -18,6 +18,7 @@
 package slabqueue
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -58,7 +59,7 @@ func TestRecycleAvoidsAllocationOnRepeatedGetDone(t *testing.T) {
 	for i := range cycles {
 		_, ok := p.Publish(i)
 		require.True(t, ok)
-		b, err := q.Get(0)
+		b, err := q.Get(context.Background(), 0)
 		require.NoError(t, err)
 		require.Equal(t, 1, b.Count())
 		b.Done()
@@ -86,14 +87,14 @@ func TestRecycledBatchFieldsAreReset(t *testing.T) {
 	// Do a Get/Done so the pool has a recycled batch with possibly
 	// non-zero ackProducers/ackCounts/done/freed/next in its history.
 	p.Publish(7)
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	b.Done()
 
 	// New Get: even if sync.Pool hands back the same struct, every
 	// observable field must be in its initial state.
 	p.Publish(8)
-	b2, err := q.Get(0)
+	b2, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	bi, ok := b2.(*batch[int])
 	require.True(t, ok, "Get must return a *batch[int]")
@@ -125,7 +126,7 @@ func TestBatchRecycleResetsAckSlices(t *testing.T) {
 	for cycle := range 2 {
 		p.Publish(cycle*10 + 1)
 		p.Publish(cycle*10 + 2)
-		b, err := q.Get(0)
+		b, err := q.Get(context.Background(), 0)
 		require.NoError(t, err)
 		require.Equal(t, 2, b.Count())
 
@@ -170,7 +171,7 @@ func TestRecycleAfterRelease(t *testing.T) {
 	for i := range cycles {
 		_, ok := p.Publish(i)
 		require.True(t, ok)
-		b, err := q.Get(0)
+		b, err := q.Get(context.Background(), 0)
 		require.NoError(t, err)
 		bi, ok := b.(*batch[int])
 		require.True(t, ok, "Get must return a *batch[int]")
@@ -194,7 +195,7 @@ func TestDoubleDoneIsSafe(t *testing.T) {
 
 	p := q.Producer(queue.ProducerConfig{ACK: func(int) {}})
 	p.Publish(1)
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 
 	// First Done: legitimate completion. Recycles the batch.
@@ -225,7 +226,7 @@ func TestFreeEntriesAfterRecycleIsSafe(t *testing.T) {
 
 	p := q.Producer(queue.ProducerConfig{ACK: func(int) {}})
 	p.Publish(7)
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 7, b.Entry(0))
 
@@ -236,7 +237,7 @@ func TestFreeEntriesAfterRecycleIsSafe(t *testing.T) {
 
 	// Publish another event and confirm it's intact.
 	p.Publish(99)
-	b2, err := q.Get(0)
+	b2, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	assert.Equal(t, 99, b2.Entry(0), "fresh batch's event must be unaffected by stale FreeEntries")
 	b2.Done()
@@ -276,7 +277,7 @@ func TestConcurrentRecycleNoCorruption(t *testing.T) {
 			defer q.Close(false)
 			received := 0
 			for received < eventsPerPipe {
-				b, err := q.Get(16)
+				b, err := q.Get(context.Background(), 16)
 				if err != nil {
 					return
 				}

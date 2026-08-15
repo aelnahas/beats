@@ -18,6 +18,7 @@
 package diskqueue
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/elastic/beats/v7/libbeat/publisher"
@@ -29,12 +30,18 @@ type diskQueueBatch struct {
 	frames []*readFrame
 }
 
-func (dq *diskQueue) Get(eventCount int) (queue.Batch[publisher.Event], error) {
+func (dq *diskQueue) Get(ctx context.Context, eventCount int) (queue.Batch[publisher.Event], error) {
 	// We can always eventually read at least one frame unless the queue or the
 	// consumer is closed.
-	frame, ok := <-dq.readerLoop.output
-	if !ok {
-		return nil, fmt.Errorf("tried to read from a closed disk queue")
+	var frame *readFrame
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case f, ok := <-dq.readerLoop.output:
+		if !ok {
+			return nil, fmt.Errorf("tried to read from a closed disk queue")
+		}
+		frame = f
 	}
 	frames := []*readFrame{frame}
 

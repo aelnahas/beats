@@ -18,6 +18,7 @@
 package slabqueue
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func TestACKWaitClosesAfterCloseAndDrain(t *testing.T) {
 	p.Close()
 	assertChanOpen(t, p.ACKWaitChan(), "ackWait must stay open while events are unacked")
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	b.Done()
 
@@ -77,7 +78,7 @@ func TestACKWaitClosesWhenAlreadyDrainedAtClose(t *testing.T) {
 
 	_, ok := p.Publish(1)
 	require.True(t, ok)
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	b.Done()
 
@@ -133,7 +134,7 @@ func TestACKWaitClosesWhenTailBatchReleased(t *testing.T) {
 	_, ok = p.Publish(2)
 	require.True(t, ok)
 
-	b, err := q.Get(0)
+	b, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 
 	p.Close()

@@ -161,7 +161,7 @@ func runWorkload(b *testing.B, producers []queue.Producer[benchEvent], consumerQ
 		go func() {
 			defer consumerWG.Done()
 			for {
-				batch, err := q.Get(128)
+				batch, err := q.Get(context.Background(), 128)
 				if errors.Is(err, io.EOF) {
 					return
 				}
@@ -230,7 +230,7 @@ func BenchmarkProducerThroughput(b *testing.B) {
 	}
 	var totalEvents int64
 	for b.Loop() {
-		batch, err := testQueue.Get(queueSize)
+		batch, err := testQueue.Get(context.Background(), queueSize)
 		if err != nil {
 			b.Fatal("Fetching queue batch should succeed")
 		}

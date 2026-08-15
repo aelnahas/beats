@@ -18,6 +18,7 @@
 package pipeline
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -256,7 +257,7 @@ func TestTTLBatchRetryDoesNotReleaseSlots(t *testing.T) {
 	}
 	require.Equal(t, 0, pool.Available(), "pool should be full after 4 publishes")
 
-	queueBatch, err := q.Get(0)
+	queueBatch, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 	require.Equal(t, 4, queueBatch.Count())
 
@@ -290,7 +291,7 @@ func TestTTLBatchDropReleasesSlots(t *testing.T) {
 	p.Publish(publisher.Event{Content: beat.Event{Private: 2}})
 	require.Equal(t, 0, pool.Available())
 
-	queueBatch, err := q.Get(0)
+	queueBatch, err := q.Get(context.Background(), 0)
 	require.NoError(t, err)
 
 	batch := newBatch(&mockRetryer{}, queueBatch, 1)

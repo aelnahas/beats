@@ -69,7 +69,7 @@ func TestFlushSettingsDoNotBlockFullBatches(t *testing.T) {
 	go func() {
 		// Run the Get asynchronously so the test itself doesn't block if
 		// there's a logical error.
-		_, _ = broker.Get(100)
+		_, _ = broker.Get(context.Background(), 100)
 	}()
 	// Lock: the last asynchronous iteration above may still be running.
 	runIterationLocked(rl, &iterLock)
@@ -108,7 +108,7 @@ func TestFlushSettingsBlockPartialBatches(t *testing.T) {
 	go func() {
 		// Run the Get asynchronously so the test itself doesn't block if
 		// there's a logical error.
-		_, _ = broker.Get(101)
+		_, _ = broker.Get(context.Background(), 101)
 	}()
 	// Lock: the last asynchronous iteration above may still be running.
 	runIterationLocked(rl, &iterLock)
@@ -146,7 +146,7 @@ func TestClosedEmptyQueueDoesNotBlockGet(t *testing.T) {
 	// run loop.
 	resultChan := make(chan error)
 	go func() {
-		_, err := broker.Get(1)
+		_, err := broker.Get(context.Background(), 1)
 		resultChan <- err
 	}()
 	select {

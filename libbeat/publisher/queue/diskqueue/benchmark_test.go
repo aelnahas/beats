@@ -30,6 +30,7 @@
 package diskqueue
 
 import (
+	"context"
 	"math/rand/v2"
 	"testing"
 	"time"
@@ -108,7 +109,7 @@ func publishEvents(r *rand.Rand, p queue.Producer[publisher.Event], num int) {
 func getAndAckEvents(q *diskQueue, num_events int, batch_size int) error {
 	var received int
 	for {
-		batch, err := q.Get(batch_size)
+		batch, err := q.Get(context.Background(), batch_size)
 		if err != nil {
 			return err
 		}

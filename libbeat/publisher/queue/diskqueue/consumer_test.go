@@ -18,6 +18,7 @@
 package diskqueue
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,7 @@ func TestQueueGetObserver(t *testing.T) {
 	for range eventCount {
 		dq.readerLoop.output <- &readFrame{bytesOnDisk: 123}
 	}
-	_, err := dq.Get(eventCount)
+	_, err := dq.Get(context.Background(), eventCount)
 	assert.NoError(t, err, "Queue Get call should succeed")
 	assertRegistryUint(t, reg, "queue.consumed.events", eventCount, "Get call should report consumed events")
 	assertRegistryUint(t, reg, "queue.consumed.bytes", eventCount*123, "Get call should report consumed bytes")

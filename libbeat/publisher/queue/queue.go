@@ -18,6 +18,8 @@
 package queue
 
 import (
+	"context"
+
 	"github.com/elastic/elastic-agent-libs/logp"
 )
 
@@ -49,7 +51,7 @@ type Queue[T any] interface {
 
 	// Get retrieves a batch of up to eventCount events. If eventCount <= 0,
 	// there is no bound on the number of returned events.
-	Get(eventCount int) (Batch[T], error)
+	Get(ctx context.Context, eventCount int) (Batch[T], error)
 }
 
 // If encoderFactory is provided, then the resulting queue must use it to

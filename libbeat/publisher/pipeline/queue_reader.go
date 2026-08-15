@@ -18,6 +18,8 @@
 package pipeline
 
 import (
+	"context"
+
 	"github.com/elastic/elastic-agent-libs/logp"
 
 	"github.com/elastic/beats/v7/libbeat/publisher"
@@ -46,7 +48,7 @@ func makeQueueReader() queueReader {
 	return qr
 }
 
-func (qr *queueReader) run(logger *logp.Logger) {
+func (qr *queueReader) run(ctx context.Context, logger *logp.Logger) {
 	logger.Debug("pipeline event consumer queue reader: start")
 	for {
 		req, ok := <-qr.req
@@ -55,7 +57,7 @@ func (qr *queueReader) run(logger *logp.Logger) {
 			logger.Debug("pipeline event consumer queue reader: stop")
 			return
 		}
-		queueBatch, _ := req.queue.Get(req.batchSize)
+		queueBatch, _ := req.queue.Get(ctx, req.batchSize)
 		var batch *ttlBatch
 		if queueBatch != nil {
 			batch = newBatch(req.retryer, queueBatch, req.timeToLive)

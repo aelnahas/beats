@@ -215,7 +215,7 @@ func TestProducerClosePreservesEventCount(t *testing.T) {
 	// Get call will block until the queue itself is cancelled.
 	go func() {
 		for range 2 {
-			batch, err := q.Get(2)
+			batch, err := q.Get(context.Background(), 2)
 			// Only error to worry about is queue closing, which isn't
 			// a test failure.
 			if err == nil {
@@ -290,10 +290,10 @@ func TestBatchFreeEntries(t *testing.T) {
 		_, ok := producer.Publish(&i)
 		require.True(t, ok, "Queue publish must succeed")
 	}
-	batch1, err := testQueue.Get(batchSize)
+	batch1, err := testQueue.Get(context.Background(), batchSize)
 	require.NoError(t, err, "Queue read must succeed")
 	require.Equal(t, batchSize, batch1.Count(), "Returned batch size must match request")
-	batch2, err := testQueue.Get(batchSize)
+	batch2, err := testQueue.Get(context.Background(), batchSize)
 	require.NoError(t, err, "Queue read must succeed")
 	require.Equal(t, batchSize, batch2.Count(), "Returned batch size must match request")
 	// Slight concurrency subtlety: we check events are non-nil after the queue
@@ -365,7 +365,7 @@ func TestProducerShutdown(t *testing.T) {
 	wg.Go(func() {
 		// Continuously read and acknowledge events from the queue
 		for {
-			batch, err := testQueue.Get(queueSize)
+			batch, err := testQueue.Get(context.Background(), queueSize)
 			if err == nil {
 				batch.Done()
 			} else {
@@ -429,7 +429,7 @@ func BenchmarkProducerThroughput(b *testing.B) {
 		// With a flush timeout of a second, we can confidently expect we'll get
 		// a full batch each time, so each iteration is measuring the time for the
 		// publish workers to fill the queue.
-		batch, err := testQueue.Get(queueSize)
+		batch, err := testQueue.Get(context.Background(), queueSize)
 		if err != nil {
 			b.Fatal("Fetching queue batch should succeed")
 		}

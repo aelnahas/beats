@@ -18,6 +18,7 @@
 package queuetest
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -303,7 +304,7 @@ func multiConsumer(numConsumers, maxEvents, batchSize int) workerFactory {
 
 				go func() {
 					for {
-						batch, err := b.Get(batchSize)
+						batch, err := b.Get(context.Background(), batchSize)
 						if err != nil {
 							return
 						}

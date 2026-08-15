@@ -18,6 +18,7 @@
 package slabqueue
 
 import (
+	"context"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -253,7 +254,7 @@ func (q *Queue[T]) removeProducer(p *producer[T]) {
 // least one event is available, applies the queue's debounce coalescing window,
 // then returns everything currently queued. It returns io.EOF once the queue is
 // closed and drained.
-func (q *Queue[T]) Get(maxEvents int) (queue.Batch[T], error) {
+func (q *Queue[T]) Get(ctx context.Context, maxEvents int) (queue.Batch[T], error) {
 	debounced := false
 	for {
 		q.mu.Lock()
@@ -262,6 +263,9 @@ func (q *Queue[T]) Get(maxEvents int) (queue.Batch[T], error) {
 				q.mu.Unlock()
 				timer := time.NewTimer(q.debounce)
 				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return nil, ctx.Err()
 				case <-timer.C:
 				case <-q.closeCh:
 					timer.Stop()
@@ -288,6 +292,8 @@ func (q *Queue[T]) Get(maxEvents int) (queue.Batch[T], error) {
 		q.mu.Unlock()
 
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-q.notify:
 			// Loop and try to drain.
 		case <-q.closeCh:

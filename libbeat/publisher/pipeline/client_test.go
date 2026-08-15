@@ -18,6 +18,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"io"
 	"strings"
@@ -124,7 +125,7 @@ func TestClient(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			for {
-				batch, err := q.Get(2)
+				batch, err := q.Get(context.Background(), 2)
 				if errors.Is(err, io.EOF) {
 					break
 				}

@@ -18,6 +18,7 @@
 package pipeline
 
 import (
+	"context"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -188,7 +189,7 @@ func (q *testQueue) Producer(cfg queue.ProducerConfig) queue.Producer[publisher.
 	return nil
 }
 
-func (q *testQueue) Get(sz int) (queue.Batch[publisher.Event], error) {
+func (q *testQueue) Get(_ context.Context, sz int) (queue.Batch[publisher.Event], error) {
 	if q.get != nil {
 		return q.get(sz)
 	}
